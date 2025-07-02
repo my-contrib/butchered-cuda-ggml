@@ -2752,6 +2752,7 @@ static void evaluate_and_capture_cuda_graph(ggml_backend_cuda_context * cuda_ctx
     const bool integrated = ggml_cuda_info().devices[cuda_ctx->device].integrated;
 
     while (!graph_evaluated_or_captured) {
+#ifdef USE_CUDA_GRAPH
         // Only perform the graph execution if CUDA graphs are not enabled, or we are capturing the graph.
         // With the use of CUDA graphs, the execution will be performed by the graph launch.
         if (!use_cuda_graph || cuda_graph_update_required) {
@@ -2782,6 +2783,7 @@ static void evaluate_and_capture_cuda_graph(ggml_backend_cuda_context * cuda_ctx
                 GGML_ASSERT(ok);
             }
         }
+#endif
 
 #ifdef USE_CUDA_GRAPH
         if (use_cuda_graph && cuda_graph_update_required) { // End CUDA graph capture

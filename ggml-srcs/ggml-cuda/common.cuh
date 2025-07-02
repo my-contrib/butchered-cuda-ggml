@@ -147,7 +147,7 @@ void ggml_cuda_error(const char * stmt, const char * func, const char * file, in
     static const char * cublas_get_error_str(const cublasStatus_t err) {
         return cublasGetStatusString(err);
     }
-#else
+#elif !defined(NO_CUBLAS)
     static const char * cublas_get_error_str(const cublasStatus_t err) {
         switch (err) {
             case CUBLAS_STATUS_SUCCESS: return "CUBLAS_STATUS_SUCCESS";
@@ -164,7 +164,11 @@ void ggml_cuda_error(const char * stmt, const char * func, const char * file, in
     }
 #endif // CUDART_VERSION >= 12000
 
+#if !defined(NO_CUBLAS)
 #define CUBLAS_CHECK(err) CUDA_CHECK_GEN(err, CUBLAS_STATUS_SUCCESS, cublas_get_error_str)
+#else
+#define CUBLAS_CHECK(err)
+#endif
 
 #if !defined(GGML_USE_HIP) && !defined(GGML_CUDA_NO_VMM)
 static const char * cu_get_error_str(CUresult err) {
@@ -292,7 +296,7 @@ static constexpr __device__ int ggml_cuda_get_physical_warp_size() {
 static __device__ void no_device_code(
     const char * file_name, const int line, const char * function_name, const int arch, const char * arch_list) {
 
-#if defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)
+#if defined(GGML_USE_HIP) && (defined(__HIP_PLATFORM_AMD__) || defined(__HIP_PLATFORM_AMD__))
     printf("%s:%d: ERROR: HIP kernel %s has no device code compatible with HIP arch %d.\n",
            file_name, line, function_name, arch);
     GGML_UNUSED(arch_list);
@@ -336,7 +340,7 @@ struct ggml_cuda_unroll<1> {
 
 template<int width = WARP_SIZE>
 static __device__ __forceinline__ int warp_reduce_sum(int x) {
-#if !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
+#if !(defined(GGML_USE_HIP) && (defined(__HIP_PLATFORM_AMD__) || defined(__HIP_PLATFORM_SPIRV__))) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
     return __reduce_add_sync(0xffffffff, x);
 #else
 #pragma unroll
@@ -368,7 +372,8 @@ static __device__ __forceinline__ float2 warp_reduce_sum(float2 a) {
 
 template<int width = WARP_SIZE>
 static __device__ __forceinline__ half2 warp_reduce_sum(half2 a) {
-#ifdef FP16_AVAILABLE
+//FIXME:
+#if defined(FP16_AVAILABLE) && !defined(__HIP_PLATFORM_SPIRV__)
 #pragma unroll
     for (int offset = width/2; offset > 0; offset >>= 1) {
         a = __hadd2(a, __shfl_xor_sync(0xffffffff, a, offset, width));
@@ -443,6 +448,8 @@ static __device__ __forceinline__ half2 ggml_cuda_hmax2(const half2 a, const hal
 #endif
 }
 
+// FIXME:
+#if !defined(__HIP_PLATFORM_SPIRV__)
 template<int width = WARP_SIZE>
 static __device__ __forceinline__ half2 warp_reduce_max(half2 x) {
 #if !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= GGML_CUDA_CC_PASCAL || (defined(GGML_USE_HIP) && HIP_VERSION >= 50700000)
@@ -456,6 +463,7 @@ static __device__ __forceinline__ half2 warp_reduce_max(half2 x) {
    NO_DEVICE_CODE;
 #endif // !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= GGML_CUDA_CC_PASCAL || (defined(GGML_USE_HIP) && HIP_VERSION >= 50700000)
 }
+#endif
 
 #if CUDART_VERSION < CUDART_HMASK
 static __device__ __forceinline__ uint32_t __hgt2_mask(const half2 a, const half2 b) {
@@ -494,7 +502,7 @@ static __device__ __forceinline__ int ggml_cuda_dp4a(const int a, const int b, i
 
 #else // defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)
 
-#if __CUDA_ARCH__ >= GGML_CUDA_CC_DP4A || defined(GGML_USE_MUSA)
+#if (__CUDA_ARCH__ >= GGML_CUDA_CC_DP4A || defined(GGML_USE_MUSA)) && !defined(__HIP_PLATFORM_SPIRV__)
     return __dp4a(a, b, c);
 #else // __CUDA_ARCH__ >= GGML_CUDA_CC_DP4A || defined(GGML_USE_MUSA)
     const int8_t * a8 = (const int8_t *) &a;
@@ -748,7 +756,8 @@ struct ggml_tensor_extra_gpu {
 };
 
 
-#if (defined(GGML_CUDA_USE_GRAPHS) || defined(GGML_HIP_GRAPHS))
+#if (defined(GGML_CUDA_USE_GRAPHS) || defined(GGML_HIP_GRAPHS)) && !defined(NO_GRAPHS_YET)
+#error FIXME cl_khr_commondbuffer not for us yet
 #define USE_CUDA_GRAPH
 #endif
 
@@ -797,7 +806,11 @@ struct ggml_backend_cuda_context {
     cudaEvent_t copy_event = nullptr;
 
     cudaStream_t streams[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS] = { { nullptr } };
+#ifndef NO_CUBLAS
     cublasHandle_t cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
+#else
+    decltype(nullptr) cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
+#endif
 
     std::unique_ptr<ggml_cuda_graph> cuda_graph;
 
@@ -820,6 +833,7 @@ struct ggml_backend_cuda_context {
         return stream(device, 0);
     }
 
+#ifndef NO_CUBLAS
     cublasHandle_t cublas_handle(int device) {
         if (cublas_handles[device] == nullptr) {
             ggml_cuda_set_device(device);
@@ -832,6 +846,7 @@ struct ggml_backend_cuda_context {
     cublasHandle_t cublas_handle() {
         return cublas_handle(device);
     }
+#endif
 
     // pool
     std::unique_ptr<ggml_cuda_pool> pools[GGML_CUDA_MAX_DEVICES];

@@ -33,6 +33,7 @@ typedef half2 ggml_half2;
 
 #define GGML_COMMON_DECL
 #elif defined(GGML_COMMON_DECL_CUDA)
+#error defined GGML_COMMON_DECL_CUDA
 #if defined(GGML_COMMON_DECL_MUSA)
 #include <musa_fp16.h>
 #else

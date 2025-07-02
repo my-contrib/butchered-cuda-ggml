@@ -2,7 +2,7 @@
 
 #define HIP_ENABLE_WARP_SYNC_BUILTINS 1
 #include <hip/hip_runtime.h>
-#include <hipblas/hipblas.h>
+//#include <hipblas/hipblas.h>
 #include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
 #ifdef __HIP_PLATFORM_AMD__
@@ -29,7 +29,9 @@
 #define CU_MEM_ACCESS_FLAGS_PROT_READWRITE hipMemAccessFlagsProtReadWrite
 #define CU_CHECK(fn) {hipError_t err = fn; if(err != hipSuccess) { GGML_ABORT("HipVMM Failure: %s\n", hipGetErrorString(err)); }}
 #define __shfl_sync(mask, var, laneMask, width) __shfl(var, laneMask, width)
+#if !defined(__HIP_PLATFORM_SPIRV__)
 #define __shfl_xor_sync(mask, var, laneMask, width) __shfl_xor(var, laneMask, width)
+#endif
 #define cublasComputeType_t hipblasDatatype_t //deprecated, new hipblasComputeType_t not in 5.6
 #define cublasCreate hipblasCreate
 #define cublasDestroy hipblasDestroy
