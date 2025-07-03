@@ -2995,6 +2995,30 @@ struct mmq_args {
     bool use_stream_k;
 };
 
+template <bool stream_k_enabled>
+struct mmq_args_ct_use_stream_k {
+    const char * x; ggml_type type_x; const int * y; const int32_t * ids_dst; const int32_t * expert_bounds; float * dst;
+    int64_t ncols_x; int64_t nrows_x; int64_t ncols_dst; int64_t stride_row_x; int64_t ncols_y; int64_t nrows_dst;
+    int64_t nchannels_x; int64_t nchannels_y; int64_t stride_channel_x; int64_t stride_channel_y; int64_t stride_channel_dst;
+    int64_t nsamples_x; int64_t nsamples_y; int64_t stride_sample_x; int64_t stride_sample_y; int64_t stride_sample_dst;
+    static constexpr inline std::bool_constant<stream_k_enabled> use_stream_k{};
+};
+
+using no_stream_k_mmq_args = mmq_args_ct_use_stream_k<false>;
+
+// True if mmq_args::use_stream_k is literal value
+template <typename mmq_args_type, bool = mmq_args_type::use_stream_k>
+constexpr auto test_compile_time_use_stream_k(int) -> std::true_type;
+
+template <typename>
+constexpr auto test_compile_time_use_stream_k(...) -> std::false_type;
+
+template <typename mmq_args_type>
+constexpr inline auto is_compile_time_stream_k = decltype(test_compile_time_use_stream_k<mmq_args_type>(0)){};
+
+static_assert(is_compile_time_stream_k<no_stream_k_mmq_args>);
+static_assert(not is_compile_time_stream_k<mmq_args>);
+
 template<ggml_type type>
 static size_t mmq_get_nbytes_shared(const int mmq_x, const int mmq_y, const int cc) {
     const tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(type, mmq_y);
@@ -3005,8 +3029,10 @@ static size_t mmq_get_nbytes_shared(const int mmq_x, const int mmq_y, const int 
     return nbs_ids + nbs_x + GGML_PAD(nbs_y, MMQ_NWARPS*WARP_SIZE*sizeof(int));
 }
 
-template <ggml_type type, int mmq_x>
-static void launch_mul_mat_q(ggml_backend_cuda_context & ctx, const mmq_args & args, cudaStream_t stream) {
+template <ggml_type type, int mmq_x,
+          typename context_type,
+          typename mmq_args_type>
+static void launch_mul_mat_q_impl(std::false_type, context_type & ctx, const mmq_args_type & args, cudaStream_t stream) {
     const int id = ggml_cuda_get_device();
     const int cc = ggml_cuda_info().devices[id].cc;
     const int nsm = ggml_cuda_info().devices[id].nsm;
@@ -3016,11 +3042,12 @@ static void launch_mul_mat_q(ggml_backend_cuda_context & ctx, const mmq_args & a
 
     const int nbytes_shared = mmq_get_nbytes_shared<type>(mmq_x, mmq_y, cc);
 
-#if !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)) && !defined(GGML_USE_MUSA)
+#if !(defined(GGML_USE_HIP) && (defined(__HIP_PLATFORM_AMD__) || defined(__HIP_PLATFORM_SPIRV__))) \
+    && !defined(GGML_USE_MUSA)
     static bool shared_memory_limit_raised[GGML_CUDA_MAX_DEVICES] = {false};
     if (!shared_memory_limit_raised[id]) {
-        CUDA_CHECK(cudaFuncSetAttribute(mul_mat_q<type, mmq_x, MMQ_NWARPS, false>, hipFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared));
-        CUDA_CHECK(cudaFuncSetAttribute(mul_mat_q<type, mmq_x, MMQ_NWARPS, true>,  hipFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared));
+        CUDA_CHECK(cudaFuncSetAttribute(mul_mat_q<type, mmq_x, MMQ_NWARPS, false>, cudaFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared));
+        CUDA_CHECK(cudaFuncSetAttribute(mul_mat_q<type, mmq_x, MMQ_NWARPS, true>,  cudaFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared));
         shared_memory_limit_raised[id] = true;
     }
 #endif // !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)) && !defined(GGML_USE_MUSA)
@@ -3098,8 +3125,120 @@ static void launch_mul_mat_q(ggml_backend_cuda_context & ctx, const mmq_args & a
     }
 }
 
-template <ggml_type type>
-void mul_mat_q_case(ggml_backend_cuda_context & ctx, const mmq_args & args, cudaStream_t stream) {
+// TODO: outline duplicated code for launch_mul_mat_q_impl
+
+template <ggml_type type, int mmq_x,
+          typename context_type,
+          typename mmq_args_type>
+static void launch_mul_mat_q_impl(std::true_type /*compile time use_stream_k*/,
+                                  context_type & ctx, const mmq_args_type & args, cudaStream_t stream) {
+
+    const int id = ggml_cuda_get_device();
+    const int cc = ggml_cuda_info().devices[id].cc;
+    const int mmq_y = get_mmq_y_host(cc);
+
+    const dim3 block_dims(WARP_SIZE, MMQ_NWARPS, 1);
+
+    const int nbytes_shared = mmq_get_nbytes_shared<type>(mmq_x, mmq_y, cc);
+
+#if !(defined(GGML_USE_HIP) && (defined(__HIP_PLATFORM_AMD__) || defined(__HIP_PLATFORM_SPIRV__))) \
+    && !defined(GGML_USE_MUSA)
+    static bool shared_memory_limit_raised[GGML_CUDA_MAX_DEVICES] = {false};
+    if (!shared_memory_limit_raised[id]) {
+        CUDA_CHECK(cudaFuncSetAttribute(mul_mat_q<type, mmq_x, MMQ_NWARPS, false>, hipFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared));
+        CUDA_CHECK(cudaFuncSetAttribute(mul_mat_q<type, mmq_x, MMQ_NWARPS, true>,  hipFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared));
+        shared_memory_limit_raised[id] = true;
+    }
+#endif // !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)) && !defined(GGML_USE_MUSA)
+
+    const int nty  = (args.nrows_x   + mmq_y - 1) / mmq_y;
+    const int ntx  = (args.ncols_dst + mmq_x - 1) / mmq_x;
+    const int ntzw = args.nchannels_y * args.nsamples_y;
+    const dim3 block_nums_xy_tiling(nty, ntx, ntzw);
+
+    GGML_ASSERT(args.nchannels_y % args.nchannels_x == 0);
+    GGML_ASSERT(args.nsamples_y  % args.nsamples_x  == 0);
+    const int channel_ratio = args.nchannels_y / args.nchannels_x;
+    const int sample_ratio  = args.nsamples_y  / args.nsamples_x;
+
+    if constexpr (not mmq_args_type::use_stream_k) {
+        if (args.nrows_x % mmq_y == 0) {
+            constexpr bool need_check = false;
+            mul_mat_q<type, mmq_x, MMQ_NWARPS, need_check><<<block_nums_xy_tiling, block_dims, nbytes_shared, stream>>>
+                (args.x, args.y, args.ids_dst, args.expert_bounds, args.dst, nullptr,
+                 args.ncols_x, args.nrows_x, args.ncols_dst, args.stride_row_x, args.ncols_y, args.nrows_dst,
+                 channel_ratio, args.nchannels_y, args.stride_channel_x, args.stride_channel_y, args.stride_channel_dst,
+                 sample_ratio, args.nsamples_y, args.stride_sample_x, args.stride_sample_y, args.stride_sample_dst);
+        } else {
+            constexpr bool need_check = true;
+            mul_mat_q<type, mmq_x, MMQ_NWARPS, need_check><<<block_nums_xy_tiling, block_dims, nbytes_shared, stream>>>
+                (args.x, args.y, args.ids_dst, args.expert_bounds, args.dst, nullptr,
+                 args.ncols_x, args.nrows_x, args.ncols_dst, args.stride_row_x, args.ncols_y, args.nrows_dst,
+                 channel_ratio, args.nchannels_y, args.stride_channel_x, args.stride_channel_y, args.stride_channel_dst,
+                 sample_ratio, args.nsamples_y, args.stride_sample_x, args.stride_sample_y, args.stride_sample_dst);
+        }
+        return;
+    } else {
+
+        const int nsm = ggml_cuda_info().devices[id].nsm;
+
+        const dim3 block_nums_stream_k(nsm, 1, 1);
+        const bool fixup_needed = ntx*nty*ntzw % nsm != 0;
+
+        ggml_cuda_pool & pool = ctx.pool(id);
+        ggml_cuda_pool_alloc<float> tmp_fixup(pool);
+        if (fixup_needed) {
+            tmp_fixup.alloc(block_nums_stream_k.x * mmq_x*mmq_y);
+        }
+
+        if (args.nrows_x % mmq_y == 0) {
+            constexpr bool need_check = false;
+
+            mul_mat_q<type, mmq_x, MMQ_NWARPS, need_check><<<block_nums_stream_k, block_dims, nbytes_shared, stream>>>
+                (args.x, args.y, args.ids_dst, args.expert_bounds, args.dst, tmp_fixup.ptr,
+                 args.ncols_x, args.nrows_x, args.ncols_dst, args.stride_row_x, args.ncols_y, args.nrows_dst,
+                 channel_ratio, args.nchannels_y, args.stride_channel_x, args.stride_channel_y, args.stride_channel_dst,
+                 sample_ratio, args.nsamples_y, args.stride_sample_x, args.stride_sample_y, args.stride_sample_dst);
+
+            if (!fixup_needed) {
+                return;
+            }
+
+            mul_mat_q_stream_k_fixup<type, mmq_x, MMQ_NWARPS, need_check><<<block_nums_stream_k, block_dims, 0, stream>>>
+                (args.ids_dst, args.expert_bounds, args.dst, tmp_fixup.ptr, args.ncols_x, args.nrows_x, args.ncols_dst,
+                 args.nrows_dst, args.nchannels_y, args.stride_channel_dst, args.nsamples_y, args.stride_sample_dst);
+        } else {
+            constexpr bool need_check = true;
+
+            mul_mat_q<type, mmq_x, MMQ_NWARPS, need_check><<<block_nums_stream_k, block_dims, nbytes_shared, stream>>>
+                (args.x, args.y, args.ids_dst, args.expert_bounds, args.dst, tmp_fixup.ptr,
+                 args.ncols_x, args.nrows_x, args.ncols_dst, args.stride_row_x, args.ncols_y, args.nrows_dst,
+                 channel_ratio, args.nchannels_y, args.stride_channel_x, args.stride_channel_y, args.stride_channel_dst,
+                 sample_ratio, args.nsamples_y, args.stride_sample_x, args.stride_sample_y, args.stride_sample_dst);
+
+            if (!fixup_needed) {
+                return;
+            }
+
+            mul_mat_q_stream_k_fixup<type, mmq_x, MMQ_NWARPS, need_check><<<block_nums_stream_k, block_dims, 0, stream>>>
+                (args.ids_dst, args.expert_bounds, args.dst, tmp_fixup.ptr, args.ncols_x, args.nrows_x, args.ncols_dst,
+                 args.nrows_dst, args.nchannels_y, args.stride_channel_dst, args.nsamples_y, args.stride_sample_dst);
+        }
+    }
+}
+
+template <ggml_type type, int mmq_x,
+          typename context_type,
+          typename mmq_args_type>
+static void launch_mul_mat_q(context_type & ctx, const mmq_args_type & args, cudaStream_t stream) {
+  launch_mul_mat_q_impl<type, mmq_x>(is_compile_time_stream_k<mmq_args_type>,
+                                     ctx, args, stream);
+}
+
+template <ggml_type type,
+          typename context_type,
+          typename mma_args_type>
+void mul_mat_q_case(context_type & ctx, const mma_args_type & args, cudaStream_t stream) {
     const int    id    = ggml_cuda_get_device();
     const int    cc    = ggml_cuda_info().devices[id].cc;
     const size_t smpbo = ggml_cuda_info().devices[id].smpbo;
@@ -3181,8 +3320,10 @@ void mul_mat_q_case(ggml_backend_cuda_context & ctx, const mmq_args & args, cuda
     }
 }
 
-#define DECL_MMQ_CASE(type)                                                        \
-    template void mul_mat_q_case<type>(ggml_backend_cuda_context & ctx, const mmq_args & args, cudaStream_t stream) \
+#define _DECL_MMQ_CASE(type, type_ctx, type_mmq_args)                                                        \
+    template void mul_mat_q_case<type>(type_ctx & ctx, const type_mmq_args & args, cudaStream_t stream) \
+
+#define DECL_MMQ_CASE(type)  _DECL_MMQ_CASE(type, ggml_backend_cuda_context, mmq_args)
 
 extern DECL_MMQ_CASE(GGML_TYPE_Q4_0);
 extern DECL_MMQ_CASE(GGML_TYPE_Q4_1);

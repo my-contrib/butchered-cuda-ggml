@@ -13,7 +13,7 @@
 #define HIPBLAS_R_16F HIP_R_16F
 #define HIPBLAS_R_16B HIP_R_16BF
 
-#define HIPBLAS_R_32F HIP_R_32F 
+#define HIPBLAS_R_32F HIP_R_32F
 
 // TODO: Really we want command buffers, but would need to use emulation layer for now.
 // Intel device will have it for syclGraphs (see IWOCL workshops'25)
@@ -25,6 +25,8 @@ using hipblasDatatype_t = hipDataType;
 #include "here-i-take/ggml-cuda/mmq.cuh"
 
 namespace {
+
+// {{{ Traits:
 
 static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
     [GGML_TYPE_I8] = {
@@ -357,19 +359,98 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
         .is_quantized             = false,
     },
 };
+// }}}
 
 //void ggml_abort(const char * file, int line, const char * fmt, ...);
 }
 
 
-#include "ggml-srcs/ggml-cuda/mmq.cu"
+//#include "ggml-srcs/ggml-cuda/mmq.cu"
 
 // FIXME:
 #define GGML_LOG_DEBUG(...)
 #define GGML_LOG_ERROR(...)
 #define GGML_LOG_INFO(...)
 #define GGML_LOG_WARN(...)
+
+#if 0
 #include "ggml-srcs/ggml-cuda/ggml-cuda.cu"
+#endif
+
+using our_context_t = struct {
+};
+
+#define OUR_DECL_MMQ_CASE(type) _DECL_MMQ_CASE(type, our_context_t, no_stream_k_mmq_args)
+
+
+static void ggml_cuda_mul_mat_q_switch_type(our_context_t & ctx, const no_stream_k_mmq_args & args, cudaStream_t stream) {
+    switch (args.type_x) {
+#if 0
+        case GGML_TYPE_Q4_0:
+            mul_mat_q_case<GGML_TYPE_Q4_0>(ctx, args, stream);
+            break;
+        case GGML_TYPE_Q4_1:
+            mul_mat_q_case<GGML_TYPE_Q4_1>(ctx, args, stream);
+            break;
+        case GGML_TYPE_Q5_0:
+            mul_mat_q_case<GGML_TYPE_Q5_0>(ctx, args, stream);
+            break;
+        case GGML_TYPE_Q5_1:
+            mul_mat_q_case<GGML_TYPE_Q5_1>(ctx, args, stream);
+            break;
+#endif
+        case GGML_TYPE_Q8_0:
+            mul_mat_q_case<GGML_TYPE_Q8_0>(ctx, args, stream);
+            break;
+#if 0
+        case GGML_TYPE_Q2_K:
+            mul_mat_q_case<GGML_TYPE_Q2_K>(ctx, args, stream);
+            break;
+        case GGML_TYPE_Q3_K:
+            mul_mat_q_case<GGML_TYPE_Q3_K>(ctx, args, stream);
+            break;
+        case GGML_TYPE_Q4_K:
+            mul_mat_q_case<GGML_TYPE_Q4_K>(ctx, args, stream);
+            break;
+        case GGML_TYPE_Q5_K:
+            mul_mat_q_case<GGML_TYPE_Q5_K>(ctx, args, stream);
+            break;
+        case GGML_TYPE_Q6_K:
+            mul_mat_q_case<GGML_TYPE_Q6_K>(ctx, args, stream);
+            break;
+#endif
+#if 0
+        case GGML_TYPE_IQ2_XXS:
+            mul_mat_q_case<GGML_TYPE_IQ2_XXS>(ctx, args, stream);
+            break;
+        case GGML_TYPE_IQ2_XS:
+            mul_mat_q_case<GGML_TYPE_IQ2_XS>(ctx, args, stream);
+            break;
+        case GGML_TYPE_IQ2_S:
+            mul_mat_q_case<GGML_TYPE_IQ2_S>(ctx, args, stream);
+            break;
+        case GGML_TYPE_IQ3_XXS:
+            mul_mat_q_case<GGML_TYPE_IQ3_XXS>(ctx, args, stream);
+            break;
+        case GGML_TYPE_IQ3_S:
+            mul_mat_q_case<GGML_TYPE_IQ3_S>(ctx, args, stream);
+            break;
+        case GGML_TYPE_IQ1_S:
+            mul_mat_q_case<GGML_TYPE_IQ1_S>(ctx, args, stream);
+            break;
+        case GGML_TYPE_IQ4_XS:
+            mul_mat_q_case<GGML_TYPE_IQ4_XS>(ctx, args, stream);
+            break;
+        case GGML_TYPE_IQ4_NL:
+            mul_mat_q_case<GGML_TYPE_IQ4_NL>(ctx, args, stream);
+            break;
+#endif
+        default:
+            GGML_ABORT("fatal error");
+            break;
+    }
+}
+
 
 void ggml_abort(const char * file, int line, const char * fmt, ...)
 {
