@@ -2371,151 +2371,252 @@ static __device__ __forceinline__ void mmq_write_back_mma(
 
 // -------------------------------------------------------------------------------------------------------------------------------------
 
+enum class vec_dot_method
+{
+  mma,
+  dp4a,
+  default_method = mma 
+};
+
+constexpr inline vec_dot_method dot_mma{vec_dot_method::mma};
+constexpr inline vec_dot_method dot_dp4a{vec_dot_method::dp4a};
+
 template <int mmq_x, int mmq_y, int nwarps, bool need_check, ggml_type type>
 struct mmq_type_traits;
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q4_0> {
-    static constexpr int              vdr          = VDR_Q4_0_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_q4_0<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_DS4>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q4_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_Q4_0_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_q4_0<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_DS4>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q4_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q4_1> {
-    static constexpr int              vdr          = VDR_Q4_1_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_q4_1<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_1_q8_1_mma<mmq_x, mmq_y, nwarps>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q4_1_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_Q4_1_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_q4_1<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_1_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q4_1_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q5_0> {
-    static constexpr int              vdr          = VDR_Q5_0_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_q5_0<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_Q5_0_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_q5_0<mmq_y, nwarps, need_check>;
+    template <auto>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q5_1> {
-    static constexpr int              vdr          = VDR_Q5_1_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_q5_1<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_1_q8_1_mma<mmq_x, mmq_y, nwarps>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_1_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_Q5_1_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_q5_1<mmq_y, nwarps, need_check>;
+
+    template <auto>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_1_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_1_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q8_0> {
-    static constexpr int              vdr          = VDR_Q8_0_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_q8_0<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_Q8_0_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_q8_0<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q2_K> {
-    static constexpr int              vdr          = VDR_Q2_K_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_q2_K<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q2_K_q8_1_mma<mmq_x, mmq_y, nwarps>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q2_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_Q2_K_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_q2_K<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q2_K_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q2_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q3_K> {
-    static constexpr int              vdr          = VDR_Q3_K_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_q3_K<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_16_q8_1_mma<mmq_x, mmq_y, nwarps>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q3_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_Q3_K_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_q3_K<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_16_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q3_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q4_K> {
-    static constexpr int              vdr          = VDR_Q4_K_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_q4_K<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_1_q8_1_mma<mmq_x, mmq_y, nwarps>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q4_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_Q4_K_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_q4_K<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_1_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q4_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q5_K> {
-    static constexpr int              vdr          = VDR_Q5_K_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_q5_K<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_1_q8_1_mma<mmq_x, mmq_y, nwarps>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q5_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_Q5_K_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_q5_K<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_1_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q5_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q6_K> {
-    static constexpr int              vdr          = VDR_Q6_K_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_q6_K<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q6_K_q8_1_mma<mmq_x, mmq_y, nwarps>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q6_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_Q6_K_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_q6_K<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q6_K_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q6_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_IQ2_XXS> {
-    static constexpr int              vdr          = VDR_IQ2_XXS_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_iq2_xxs<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_IQ2_XXS_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_iq2_xxs<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_IQ2_XS> {
-    static constexpr int              vdr          = VDR_IQ2_XS_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_iq2_xs<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_16_q8_1_mma<mmq_x, mmq_y, nwarps>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_16_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_IQ2_XS_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_iq2_xs<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_16_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_0_16_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_IQ2_S> {
-    static constexpr int              vdr          = VDR_IQ2_S_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_iq2_s<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_16_q8_1_mma<mmq_x, mmq_y, nwarps>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_16_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_IQ2_S_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_iq2_s<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_16_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_0_16_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_IQ3_XXS> {
-    static constexpr int              vdr          = VDR_IQ3_XXS_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_iq3_xxs<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_IQ3_XXS_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_iq3_xxs<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_IQ3_S> {
-    static constexpr int              vdr          = VDR_IQ3_S_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_iq3_s<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_IQ3_S_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_iq3_s<mmq_y, nwarps, need_check>;
+
+    template <vec_dot_method>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_IQ1_S> {
-    static constexpr int              vdr          = VDR_IQ1_S_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_iq1_s<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_1_q8_1_mma<mmq_x, mmq_y, nwarps>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_1_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_IQ1_S_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_iq1_s<mmq_y, nwarps, need_check>;
+
+    template <auto>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_1_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_1_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_IQ4_NL> {
-    static constexpr int              vdr          = VDR_IQ4_NL_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_iq4_nl<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_IQ4_NL_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_iq4_nl<mmq_y, nwarps, need_check>;
+
+    template <auto>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_IQ4_XS> {
-    static constexpr int              vdr          = VDR_IQ4_XS_Q8_1_MMQ;
-    static constexpr load_tiles_mmq_t load_tiles   = load_tiles_iq4_xs<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
-    static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
+    static constexpr int              vdr                = VDR_IQ4_XS_Q8_1_MMQ;
+    static constexpr load_tiles_mmq_t load_tiles         = load_tiles_iq4_xs<mmq_y, nwarps, need_check>;
+
+    template <auto>
+    static constexpr vec_dot_mmq_t    vec_dot            = vec_dot<dot_mma>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_mma>   = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps, MMQ_Q8_1_DS_LAYOUT_D4>;
+    template <>
+    constexpr vec_dot_mmq_t    vec_dot<dot_dp4a>  = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
 template <ggml_type type, int mmq_x, int nwarps, bool need_check, bool fixup>
@@ -2534,10 +2635,10 @@ static __device__ __forceinline__ void mul_mat_q_process_tile(
     int * tile_x = tile_y + GGML_PAD(mmq_x*(WARP_SIZE + WARP_SIZE/QI8_1), nwarps*WARP_SIZE);
 
 #ifdef NEW_MMA_AVAILABLE
-    constexpr vec_dot_mmq_t    vec_dot    = mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, type>::vec_dot_mma;
+    constexpr vec_dot_mmq_t    vec_dot    = mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, type>::template vec_dot<dot_mma>;
     constexpr mmq_write_back_t write_back = mmq_write_back_mma<mmq_x, mmq_y, nwarps, need_check>;
 #else
-    constexpr vec_dot_mmq_t    vec_dot    = mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, type>::vec_dot_dp4a;
+    constexpr vec_dot_mmq_t    vec_dot    = mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, type>::template vec_dot<dot_dp4a>;
     constexpr mmq_write_back_t write_back = mmq_write_back_dp4a<mmq_x, mmq_y, nwarps, need_check>;
 #endif // NEW_MMA_AVAILABLE
 
@@ -3145,8 +3246,8 @@ static void launch_mul_mat_q_impl(std::true_type /*compile time use_stream_k*/,
     && !defined(GGML_USE_MUSA)
     static bool shared_memory_limit_raised[GGML_CUDA_MAX_DEVICES] = {false};
     if (!shared_memory_limit_raised[id]) {
-        CUDA_CHECK(cudaFuncSetAttribute(mul_mat_q<type, mmq_x, MMQ_NWARPS, false>, hipFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared));
-        CUDA_CHECK(cudaFuncSetAttribute(mul_mat_q<type, mmq_x, MMQ_NWARPS, true>,  hipFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared));
+        CUDA_CHECK(cudaFuncSetAttribute(mul_mat_q<type, mmq_x, MMQ_NWARPS, false>, cudaFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared));
+        CUDA_CHECK(cudaFuncSetAttribute(mul_mat_q<type, mmq_x, MMQ_NWARPS, true>,  cudaFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared));
         shared_memory_limit_raised[id] = true;
     }
 #endif // !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)) && !defined(GGML_USE_MUSA)

@@ -385,7 +385,6 @@ using our_context_t = struct {
 
 static void ggml_cuda_mul_mat_q_switch_type(our_context_t & ctx, const no_stream_k_mmq_args & args, cudaStream_t stream) {
     switch (args.type_x) {
-#if 0
         case GGML_TYPE_Q4_0:
             mul_mat_q_case<GGML_TYPE_Q4_0>(ctx, args, stream);
             break;
@@ -398,11 +397,9 @@ static void ggml_cuda_mul_mat_q_switch_type(our_context_t & ctx, const no_stream
         case GGML_TYPE_Q5_1:
             mul_mat_q_case<GGML_TYPE_Q5_1>(ctx, args, stream);
             break;
-#endif
         case GGML_TYPE_Q8_0:
             mul_mat_q_case<GGML_TYPE_Q8_0>(ctx, args, stream);
             break;
-#if 0
         case GGML_TYPE_Q2_K:
             mul_mat_q_case<GGML_TYPE_Q2_K>(ctx, args, stream);
             break;
@@ -418,8 +415,6 @@ static void ggml_cuda_mul_mat_q_switch_type(our_context_t & ctx, const no_stream
         case GGML_TYPE_Q6_K:
             mul_mat_q_case<GGML_TYPE_Q6_K>(ctx, args, stream);
             break;
-#endif
-#if 0
         case GGML_TYPE_IQ2_XXS:
             mul_mat_q_case<GGML_TYPE_IQ2_XXS>(ctx, args, stream);
             break;
@@ -444,7 +439,6 @@ static void ggml_cuda_mul_mat_q_switch_type(our_context_t & ctx, const no_stream
         case GGML_TYPE_IQ4_NL:
             mul_mat_q_case<GGML_TYPE_IQ4_NL>(ctx, args, stream);
             break;
-#endif
         default:
             GGML_ABORT("fatal error");
             break;
@@ -456,7 +450,6 @@ void ggml_abort(const char * file, int line, const char * fmt, ...)
 {
   va_list args;
   va_start(args, fmt);
-  //vsnprintf(message + offset, sizeof(message) - offset, fmt, args);
   std::vprintf(fmt, args);
   va_end(args);
 
